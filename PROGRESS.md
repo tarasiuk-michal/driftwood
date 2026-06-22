@@ -1,39 +1,40 @@
 # PROGRESS.md
 
 ## Current Phase
-**Phase 1 — Kafka transport, single step, happy path** ✅ Complete
+**Phase 2 — Retry with backoff** ✅ Complete
 
 ## Done
 - **Phase 0:** Spring Boot 3.3.5 / Java 21, Postgres + Flyway, domain model, synchronous REST endpoint, trivial workflow seed, integration test
-- **Phase 1:**
-  - Kafka (Bitnami KRaft, no Zookeeper) added to docker-compose
-  - `StepDispatchMessage` / `StepResultMessage` records + `Topics` constants
-  - `WorkerService` — `@KafkaListener` on dispatch topic, simulates execution (configurable failure rate), publishes result
-  - `OrchestratorService` rewritten — `submit()` creates instance + dispatches first step async; `handleStepResult()` advances to next step or marks COMPLETED/FAILED; `getStatus()` for polling
-  - `POST /workflows/{id}/instances` → 202 Accepted (async)
-  - `GET /workflows/instances/{id}` → current status
-  - Tests use `@EmbeddedKafka` + Awaitility polling
-  - Worker failure rate configurable via `driftwood.worker.failure-rate` (default 0.0)
-  - Design decision: worker as `@Component` in same app (not separate module) — simpler for demo, split is mechanical later
+- **Phase 1:** Kafka (Bitnami KRaft), async dispatch/result, WorkerService, OrchestratorService, GET status endpoint, EmbeddedKafka tests
+- **Phase 2:**
+  - V3 migration: `next_retry_at`, `max_attempts` on `step_executions`; `dead_letter_entries` table; `flaky-workflow` seed
+  - `RetryBackoffCalculator`: exponential backoff (base 2s, cap 5m), capped at attempt 8
+  - `RetryPoller`: `@Scheduled` every 1s, queries `step_executions` where RETRYING and `next_retry_at <= now()`, re-dispatches
+  - `OrchestratorService.handleStepResult()`: FAILED → schedule retry or dead-letter after `maxAttempts`
+  - `DeadLetterEntry` entity + `DeadLetterRepository`
+  - `WorkerProperties` (`@ConfigurationProperties`): `failureRate` + `stepFailures` map for per-step deterministic failures
+  - ADR-001 written (`docs/decisions/ADR-001-postgres-polling-retries.md`)
+  - Integration test: flaky-workflow (step-2 fails 2x then succeeds) → COMPLETED after 2 retries
 
 ## In Progress
 Nothing.
 
 ## Deferred
-- Retry with exponential backoff + dead-letter (Phase 2)
 - Idempotency keys (Phase 3)
-- Multi-step retry cycle per step (Phase 4 adds this; Phase 1 already advances steps)
+- Multi-step retry cycle per step — Phase 4 (Phase 2 already handles retry within a step; Phase 4 adds per-step retry isolation in multi-step flows)
 - Control Room UI — scenario launcher + live SSE log (Phase 5)
 - Control Room UI — observability charts (Phase 6)
 - Polish, README, v1 tag (Phase 7)
-- Crash recovery — explicitly cut from v1 (see DESIGN.md)
+- Dead-letter integration test (isolated Spring context needed for step-failures=99 config)
+- Crash recovery — explicitly cut from v1
 
 ## Open Questions
 None.
 
 ## Notes for Next Session
-- Start Phase 2: retry with exponential backoff
-- Write ADR-001 (Postgres-polling retries) BEFORE writing any Phase 2 code — this is the centerpiece design decision
-- Phase 2 intercepts the FAILED path in `OrchestratorService.handleStepResult()`: instead of marking FAILED, write `next_retry_at` + increment `attempt_count`, mark RETRYING
-- Need: `next_retry_at` + `attempt_count` columns on `step_executions` (Flyway V3), a scheduled poller (`@Scheduled`), exponential backoff calc, max attempt cap, dead-letter path
-- Test scenario: configure trivial-workflow-step-2 to fail twice then succeed (needs per-step failure config or a new seed workflow)
+- Start Phase 3: idempotency
+- Client supplies idempotency key on POST `/workflows/{id}/instances?idempotencyKey=...` (or header)
+- Duplicate key within time window → return existing instance instead of creating new
+- Worker-side: duplicate dispatch for same (instanceId, stepId, attemptCount) = no-op
+- New table: `idempotency_keys` (key, workflow_instance_id, created_at)
+- Need to decide: idempotency key as query param vs. header (`Idempotency-Key`)

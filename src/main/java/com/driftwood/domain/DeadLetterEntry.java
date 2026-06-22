@@ -9,11 +9,11 @@ import java.time.Instant;
 import java.util.UUID;
 
 @Entity
-@Table(name = "step_executions")
+@Table(name = "dead_letter_entries")
 @Getter
 @Setter
 @NoArgsConstructor
-public class StepExecution {
+public class DeadLetterEntry {
 
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
@@ -23,24 +23,13 @@ public class StepExecution {
     @JoinColumn(name = "workflow_instance_id", nullable = false)
     private WorkflowInstance workflowInstance;
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "step_id", nullable = false)
-    private Step step;
+    @Column(nullable = false)
+    private String stepId;
 
     @Column(nullable = false)
-    private int attemptCount = 0;
+    private int finalAttemptCount;
 
-    @Enumerated(EnumType.STRING)
-    @Column(nullable = false)
-    private StepStatus status = StepStatus.PENDING;
-
-    private Instant startedAt;
-    private Instant completedAt;
     private String errorMessage;
-    private Instant nextRetryAt;
-
-    @Column(nullable = false)
-    private int maxAttempts = 3;
 
     @Column(nullable = false, updatable = false)
     private Instant createdAt = Instant.now();

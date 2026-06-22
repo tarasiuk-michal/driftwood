@@ -1,5 +1,6 @@
 package com.driftwood.api;
 
+import com.driftwood.repository.DeadLetterRepository;
 import com.driftwood.repository.StepExecutionRepository;
 import com.driftwood.repository.WorkflowInstanceRepository;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -9,6 +10,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.kafka.test.context.EmbeddedKafka;
+import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 
@@ -21,10 +23,12 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-@SpringBootTest
+@SpringBootTest(properties = {
+        "driftwood.worker.step-failures.flaky-workflow-step-2=2"
+})
 @AutoConfigureMockMvc
 @EmbeddedKafka(partitions = 1, topics = {"driftwood.step.dispatch", "driftwood.step.result"})
-class WorkflowControllerTest {
+class RetryAndDeadLetterTest {
 
     @Autowired
     private MockMvc mockMvc;
@@ -38,43 +42,30 @@ class WorkflowControllerTest {
     @Autowired
     private StepExecutionRepository stepExecutionRepository;
 
+    @Autowired
+    private DeadLetterRepository deadLetterRepository;
+
     @AfterEach
     void cleanup() {
+        deadLetterRepository.deleteAll();
         stepExecutionRepository.deleteAll();
         instanceRepository.deleteAll();
     }
 
     @Test
-    void createInstance_happyPath_completesAllSteps() throws Exception {
-        MvcResult result = mockMvc.perform(post("/workflows/trivial-workflow/instances"))
+    void flakeyWorkflow_retriesTwiceThenCompletes() throws Exception {
+        MvcResult result = mockMvc.perform(post("/workflows/flaky-workflow/instances"))
                 .andExpect(status().isAccepted())
-                .andExpect(jsonPath("$.workflowId").value("trivial-workflow"))
-                .andExpect(jsonPath("$.id").isNotEmpty())
                 .andReturn();
 
         UUID instanceId = UUID.fromString(
                 objectMapper.readTree(result.getResponse().getContentAsString())
                         .get("id").asText());
 
-        await().atMost(10, SECONDS).untilAsserted(() ->
+        await().atMost(30, SECONDS).untilAsserted(() ->
                 mockMvc.perform(get("/workflows/instances/" + instanceId))
                         .andExpect(status().isOk())
                         .andExpect(jsonPath("$.status").value("COMPLETED"))
-                        .andExpect(jsonPath("$.steps.length()").value(2))
-                        .andExpect(jsonPath("$.steps[0].status").value("COMPLETED"))
-                        .andExpect(jsonPath("$.steps[1].status").value("COMPLETED"))
         );
-    }
-
-    @Test
-    void createInstance_unknownWorkflow_returns404() throws Exception {
-        mockMvc.perform(post("/workflows/nonexistent/instances"))
-                .andExpect(status().isNotFound());
-    }
-
-    @Test
-    void getInstance_unknownInstance_returns404() throws Exception {
-        mockMvc.perform(get("/workflows/instances/" + UUID.randomUUID()))
-                .andExpect(status().isNotFound());
     }
 }

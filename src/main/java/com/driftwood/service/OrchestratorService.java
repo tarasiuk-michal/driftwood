@@ -7,6 +7,7 @@ import com.driftwood.exception.WorkflowNotFoundException;
 import com.driftwood.messaging.StepDispatchMessage;
 import com.driftwood.messaging.StepResultMessage;
 import com.driftwood.messaging.Topics;
+import com.driftwood.repository.DeadLetterRepository;
 import com.driftwood.repository.StepExecutionRepository;
 import com.driftwood.repository.StepRepository;
 import com.driftwood.repository.WorkflowInstanceRepository;
@@ -32,6 +33,7 @@ public class OrchestratorService {
     private final WorkflowInstanceRepository instanceRepository;
     private final StepExecutionRepository stepExecutionRepository;
     private final StepRepository stepRepository;
+    private final DeadLetterRepository deadLetterRepository;
     private final KafkaTemplate<String, StepDispatchMessage> kafkaTemplate;
 
     @Transactional
@@ -100,16 +102,46 @@ public class OrchestratorService {
                             }
                     );
         } else {
-            execution.setStatus(StepStatus.FAILED);
-            execution.setCompletedAt(Instant.now());
-            execution.setErrorMessage(message.errorMessage());
-            stepExecutionRepository.save(execution);
+            int nextAttempt = execution.getAttemptCount() + 1;
 
-            instance.setStatus(WorkflowStatus.FAILED);
-            instance.setUpdatedAt(Instant.now());
-            instanceRepository.save(instance);
-            log.warn("Workflow instance {} failed at step {}", instance.getId(), message.stepId());
+            if (nextAttempt >= execution.getMaxAttempts()) {
+                deadLetter(execution, instance, message.errorMessage());
+            } else {
+                execution.setAttemptCount(nextAttempt);
+                execution.setStatus(StepStatus.RETRYING);
+                execution.setErrorMessage(message.errorMessage());
+                execution.setNextRetryAt(Instant.now().plus(RetryBackoffCalculator.delayFor(nextAttempt)));
+                stepExecutionRepository.save(execution);
+
+                instance.setStatus(WorkflowStatus.RETRYING);
+                instance.setUpdatedAt(Instant.now());
+                instanceRepository.save(instance);
+
+                log.warn("Step {} failed for instance {}, scheduled retry attempt {} at {}",
+                        message.stepId(), message.instanceId(), nextAttempt, execution.getNextRetryAt());
+            }
         }
+    }
+
+    private void deadLetter(StepExecution execution, WorkflowInstance instance, String errorMessage) {
+        execution.setStatus(StepStatus.DEAD_LETTERED);
+        execution.setCompletedAt(Instant.now());
+        execution.setErrorMessage(errorMessage);
+        stepExecutionRepository.save(execution);
+
+        DeadLetterEntry entry = new DeadLetterEntry();
+        entry.setWorkflowInstance(instance);
+        entry.setStepId(execution.getStep().getId());
+        entry.setFinalAttemptCount(execution.getAttemptCount());
+        entry.setErrorMessage(errorMessage);
+        deadLetterRepository.save(entry);
+
+        instance.setStatus(WorkflowStatus.DEAD_LETTERED);
+        instance.setUpdatedAt(Instant.now());
+        instanceRepository.save(instance);
+
+        log.error("Step {} dead-lettered for instance {} after {} attempts",
+                execution.getStep().getId(), instance.getId(), execution.getAttemptCount());
     }
 
     private void dispatchStep(WorkflowInstance instance, Step step) {
