@@ -1,0 +1,19 @@
+spring:
+  application:
+    name: driftwood
+  datasource:
+    url: jdbc:postgresql://localhost:5432/driftwood
+    username: driftwood
+    password: driftwood
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+
+server:
+  port: 8080
