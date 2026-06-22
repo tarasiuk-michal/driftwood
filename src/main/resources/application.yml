@@ -33,3 +33,6 @@ server:
 driftwood:
   worker:
     failure-rate: 0.0
+    step-failures:
+      flaky-workflow-step-2: 10
+      poison-workflow-step-2: 99

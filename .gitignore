@@ -16,3 +16,5 @@ session.log
 .zprofile
 .zshrc
 .claude/
+ui/node_modules/
+ui/dist/

@@ -2,6 +2,7 @@ package com.driftwood.service;
 
 import com.driftwood.api.dto.WorkflowInstanceResponse;
 import com.driftwood.domain.*;
+import com.driftwood.events.WorkflowEvent;
 import com.driftwood.exception.WorkflowInstanceNotFoundException;
 import com.driftwood.exception.WorkflowNotFoundException;
 import com.driftwood.messaging.StepDispatchMessage;
@@ -15,6 +16,7 @@ import com.driftwood.repository.WorkflowInstanceRepository;
 import com.driftwood.repository.WorkflowRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Service;
@@ -37,6 +39,7 @@ public class OrchestratorService {
     private final DeadLetterRepository deadLetterRepository;
     private final IdempotencyKeyRepository idempotencyKeyRepository;
     private final KafkaTemplate<String, StepDispatchMessage> kafkaTemplate;
+    private final ApplicationEventPublisher eventPublisher;
 
     @Transactional
     public WorkflowInstanceResponse submit(String workflowId, String idempotencyKey) {
@@ -65,11 +68,14 @@ public class OrchestratorService {
             idempotencyKeyRepository.save(key);
         }
 
+        eventPublisher.publishEvent(WorkflowEvent.submitted(instance.getId(), workflowId));
+
         List<Step> steps = workflow.getSteps();
         if (steps.isEmpty()) {
             instance.setStatus(WorkflowStatus.COMPLETED);
             instance.setUpdatedAt(Instant.now());
             instanceRepository.save(instance);
+            eventPublisher.publishEvent(WorkflowEvent.workflowCompleted(instance.getId(), workflowId));
             return WorkflowInstanceResponse.from(instance);
         }
 
@@ -107,14 +113,16 @@ public class OrchestratorService {
         }
 
         WorkflowInstance instance = execution.getWorkflowInstance();
+        String workflowId = instance.getWorkflow().getId();
 
         if (message.success()) {
             execution.setStatus(StepStatus.COMPLETED);
             execution.setCompletedAt(Instant.now());
             stepExecutionRepository.save(execution);
 
+            eventPublisher.publishEvent(WorkflowEvent.stepCompleted(instance.getId(), workflowId, message.stepId()));
+
             Step completedStep = execution.getStep();
-            String workflowId = instance.getWorkflow().getId();
 
             stepRepository.findByWorkflowIdAndStepOrder(workflowId, completedStep.getStepOrder() + 1)
                     .ifPresentOrElse(
@@ -123,6 +131,7 @@ public class OrchestratorService {
                                 instance.setStatus(WorkflowStatus.COMPLETED);
                                 instance.setUpdatedAt(Instant.now());
                                 instanceRepository.save(instance);
+                                eventPublisher.publishEvent(WorkflowEvent.workflowCompleted(instance.getId(), workflowId));
                                 log.info("Workflow instance {} completed", instance.getId());
                             }
                     );
@@ -141,6 +150,8 @@ public class OrchestratorService {
                 instance.setStatus(WorkflowStatus.RETRYING);
                 instance.setUpdatedAt(Instant.now());
                 instanceRepository.save(instance);
+
+                eventPublisher.publishEvent(WorkflowEvent.retrying(instance.getId(), workflowId, message.stepId()));
 
                 log.warn("Step {} failed for instance {}, scheduled retry attempt {} at {}",
                         message.stepId(), message.instanceId(), nextAttempt, execution.getNextRetryAt());
@@ -165,6 +176,8 @@ public class OrchestratorService {
         instance.setUpdatedAt(Instant.now());
         instanceRepository.save(instance);
 
+        eventPublisher.publishEvent(WorkflowEvent.deadLettered(instance.getId(), instance.getWorkflow().getId(), execution.getStep().getId()));
+
         log.error("Step {} dead-lettered for instance {} after {} attempts",
                 execution.getStep().getId(), instance.getId(), execution.getAttemptCount());
     }
@@ -181,6 +194,8 @@ public class OrchestratorService {
 
         kafkaTemplate.send(Topics.STEP_DISPATCH,
                 new StepDispatchMessage(instance.getId(), step.getId(), execution.getAttemptCount()));
+
+        eventPublisher.publishEvent(WorkflowEvent.stepDispatched(instance.getId(), instance.getWorkflow().getId(), step.getId()));
 
         log.info("Dispatched step {} for instance {}", step.getId(), instance.getId());
     }
