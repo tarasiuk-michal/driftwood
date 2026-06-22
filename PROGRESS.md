@@ -1,35 +1,36 @@
 # PROGRESS.md
 
 ## Current Phase
-**Phase 3 — Idempotency** ✅ Complete
+**Phase 4 — Multi-step workflows** ✅ Complete
 
 ## Done
 - **Phase 0:** Spring Boot 3.3.5 / Java 21, Postgres + Flyway, domain model, synchronous REST endpoint, trivial workflow seed, integration test
 - **Phase 1:** Kafka (Bitnami KRaft), async dispatch/result, WorkerService, OrchestratorService, GET status endpoint, EmbeddedKafka tests
 - **Phase 2:** Postgres-polling retry with exponential backoff, dead-letter table, RetryPoller, WorkerProperties, ADR-001
-- **Phase 3:**
-  - V4 migration: `idempotency_keys` table (key → workflow_instance_id)
-  - `POST /workflows/{id}/instances` accepts `Idempotency-Key` header (optional)
-  - Duplicate key within any window returns existing instance (no new instance created)
-  - Worker-side: duplicate result for already-terminal StepExecution is a no-op
-  - Test: same key twice → same instance ID returned
+- **Phase 3:** Idempotency-Key header, idempotency_keys table, worker-side duplicate result no-op
+- **Phase 4:**
+  - V5 migration: three-step-workflow seed (steps 1/2/3)
+  - Verified: step-1 runs exactly once, step-2 retries in-place, step-3 runs after step-2 succeeds
+  - Fixed cross-context H2 interference: each Spring test context now gets unique H2 DB via `${random.uuid}` in URL — prevents RetryPoller from one context interfering with another's RETRYING rows
 
 ## In Progress
 Nothing.
 
 ## Deferred
-- Multi-step per-step retry cycle isolation (Phase 4)
 - Control Room UI — scenario launcher + live SSE log (Phase 5)
 - Control Room UI — observability charts (Phase 6)
 - Polish, README, v1 tag (Phase 7)
-- Dead-letter integration test (needs separate Spring context with step-failures=99)
+- Dead-letter integration test (isolated Spring context with step-failures=99)
 - Crash recovery — explicitly cut from v1
 
 ## Open Questions
 None.
 
 ## Notes for Next Session
-- Phase 4 already partially works: orchestrator advances steps after each success
-- Phase 4 focus: verify per-step retry cycle is isolated (step-2 failure doesn't restart step-1)
-- May need: workflow seed with 3 steps where step-2 fails N times, verify step-1 runs exactly once
-- Consider adding `GET /workflows/instances/{id}` response to include step-level retry count
+- Start Phase 5: React Control Room UI
+- Single-page app: scenario launcher (3-4 buttons) + live SSE event log (color-coded, filterable)
+- Backend: POST /scenarios/{name} to trigger named scenario (clean-batch, flaky-batch, poison-job, duplicate-test)
+- Backend: GET /events/stream (SSE) — push WorkflowInstance state transitions as they happen
+- Need SSE endpoint + EventPublisher that hooks into OrchestratorService state changes
+- Frontend: minimal React (Vite), fetch SSE via EventSource
+- Key decision: SSE vs WebSocket for the live log (SSE is simpler, one-directional fits)

@@ -82,11 +82,11 @@ strictly in phase order unless told otherwise.
 - **Never commit automatically.** After finishing a unit of work, stop and
   show me a `git diff --stat` summary and a short description of what
   changed and why. Wait for my go-ahead before running `git commit`.
-- **Never write the commit message yourself.** Propose a one-line summary
-  of *what* changed as a suggestion only, then explicitly ask me: "What
-  commit message do you want for this?" Use whatever I give you verbatim.
-  If I say "use your suggestion," that's fine — but the default is to ask,
-  not assume.
+- **Propose a commit message; don't ask.** After the diff summary, state a
+  proposed message as: a super short topic line on top (e.g. "multi-step
+  workflow"), then the standard Co-Authored-By footer. Use the proposal
+  directly unless I give a different message — no "what commit message do
+  you want?" question.
 - **Never push without asking**, even to a personal remote.
 - **No commits that mix phases.** If you notice mid-task that something
   belongs to a later phase, stop and flag it rather than doing it early
