@@ -8,6 +8,7 @@ import com.driftwood.messaging.StepDispatchMessage;
 import com.driftwood.messaging.StepResultMessage;
 import com.driftwood.messaging.Topics;
 import com.driftwood.repository.DeadLetterRepository;
+import com.driftwood.repository.IdempotencyKeyRepository;
 import com.driftwood.repository.StepExecutionRepository;
 import com.driftwood.repository.StepRepository;
 import com.driftwood.repository.WorkflowInstanceRepository;
@@ -34,10 +35,21 @@ public class OrchestratorService {
     private final StepExecutionRepository stepExecutionRepository;
     private final StepRepository stepRepository;
     private final DeadLetterRepository deadLetterRepository;
+    private final IdempotencyKeyRepository idempotencyKeyRepository;
     private final KafkaTemplate<String, StepDispatchMessage> kafkaTemplate;
 
     @Transactional
-    public WorkflowInstanceResponse submit(String workflowId) {
+    public WorkflowInstanceResponse submit(String workflowId, String idempotencyKey) {
+        if (idempotencyKey != null) {
+            IdempotencyKey existing = idempotencyKeyRepository.findById(idempotencyKey).orElse(null);
+            if (existing != null) {
+                log.info("Duplicate idempotency key {}, returning existing instance {}", idempotencyKey, existing.getWorkflowInstanceId());
+                return instanceRepository.findById(existing.getWorkflowInstanceId())
+                        .map(WorkflowInstanceResponse::from)
+                        .orElseThrow(() -> new WorkflowInstanceNotFoundException(existing.getWorkflowInstanceId()));
+            }
+        }
+
         Workflow workflow = workflowRepository.findById(workflowId)
                 .orElseThrow(() -> new WorkflowNotFoundException(workflowId));
 
@@ -45,6 +57,13 @@ public class OrchestratorService {
         instance.setWorkflow(workflow);
         instance.setStatus(WorkflowStatus.RUNNING);
         instanceRepository.save(instance);
+
+        if (idempotencyKey != null) {
+            IdempotencyKey key = new IdempotencyKey();
+            key.setIdempotencyKey(idempotencyKey);
+            key.setWorkflowInstanceId(instance.getId());
+            idempotencyKeyRepository.save(key);
+        }
 
         List<Step> steps = workflow.getSteps();
         if (steps.isEmpty()) {
@@ -80,6 +99,12 @@ public class OrchestratorService {
                 .findByWorkflowInstanceIdAndStepId(message.instanceId(), message.stepId())
                 .orElseThrow(() -> new IllegalStateException(
                         "No StepExecution found for instance=" + message.instanceId() + " step=" + message.stepId()));
+
+        if (execution.getStatus() == StepStatus.COMPLETED || execution.getStatus() == StepStatus.DEAD_LETTERED) {
+            log.info("Duplicate result for step {} instance {} (status={}), skipping",
+                    message.stepId(), message.instanceId(), execution.getStatus());
+            return;
+        }
 
         WorkflowInstance instance = execution.getWorkflowInstance();
 

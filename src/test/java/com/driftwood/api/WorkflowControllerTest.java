@@ -1,5 +1,6 @@
 package com.driftwood.api;
 
+import com.driftwood.repository.IdempotencyKeyRepository;
 import com.driftwood.repository.StepExecutionRepository;
 import com.driftwood.repository.WorkflowInstanceRepository;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -38,8 +39,12 @@ class WorkflowControllerTest {
     @Autowired
     private StepExecutionRepository stepExecutionRepository;
 
+    @Autowired
+    private IdempotencyKeyRepository idempotencyKeyRepository;
+
     @AfterEach
     void cleanup() {
+        idempotencyKeyRepository.deleteAll();
         stepExecutionRepository.deleteAll();
         instanceRepository.deleteAll();
     }
@@ -64,6 +69,29 @@ class WorkflowControllerTest {
                         .andExpect(jsonPath("$.steps[0].status").value("COMPLETED"))
                         .andExpect(jsonPath("$.steps[1].status").value("COMPLETED"))
         );
+    }
+
+    @Test
+    void createInstance_duplicateIdempotencyKey_returnsSameInstance() throws Exception {
+        String key = "test-idem-key-" + UUID.randomUUID();
+
+        MvcResult first = mockMvc.perform(post("/workflows/trivial-workflow/instances")
+                        .header("Idempotency-Key", key))
+                .andExpect(status().isAccepted())
+                .andReturn();
+
+        String firstId = objectMapper.readTree(first.getResponse().getContentAsString())
+                .get("id").asText();
+
+        MvcResult second = mockMvc.perform(post("/workflows/trivial-workflow/instances")
+                        .header("Idempotency-Key", key))
+                .andExpect(status().isAccepted())
+                .andReturn();
+
+        String secondId = objectMapper.readTree(second.getResponse().getContentAsString())
+                .get("id").asText();
+
+        assert firstId.equals(secondId) : "Duplicate idempotency key must return same instance";
     }
 
     @Test

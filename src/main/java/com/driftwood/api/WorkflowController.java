@@ -16,8 +16,10 @@ public class WorkflowController {
     private final OrchestratorService orchestratorService;
 
     @PostMapping("/{workflowId}/instances")
-    public ResponseEntity<WorkflowInstanceResponse> createInstance(@PathVariable String workflowId) {
-        return ResponseEntity.accepted().body(orchestratorService.submit(workflowId));
+    public ResponseEntity<WorkflowInstanceResponse> createInstance(
+            @PathVariable String workflowId,
+            @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey) {
+        return ResponseEntity.accepted().body(orchestratorService.submit(workflowId, idempotencyKey));
     }
 
     @GetMapping("/instances/{instanceId}")
