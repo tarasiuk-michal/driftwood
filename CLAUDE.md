@@ -7,7 +7,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Build & Run
 
 ```bash
-# Start Postgres
+# Start Postgres + Kafka
 docker compose up -d
 
 # Build (skip tests)
@@ -16,14 +16,17 @@ docker compose up -d
 # Run
 ./mvnw spring-boot:run
 
-# Run tests (uses H2 in-memory, no Docker needed)
+# Run tests (H2 in-memory + EmbeddedKafka, no Docker needed)
 ./mvnw test
 
 # Run a single test class
 ./mvnw test -Dtest=WorkflowControllerTest
 
-# Verify the running app
+# Submit a workflow (returns 202 + instance id)
 curl -s -X POST http://localhost:8080/workflows/trivial-workflow/instances | jq .
+
+# Poll status
+curl -s http://localhost:8080/workflows/instances/{id} | jq .status
 ```
 
 ---
