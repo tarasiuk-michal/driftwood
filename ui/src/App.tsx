@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
+import MetricsPanel from './MetricsPanel.tsx'
 import './App.css'
 
 type EventType =
@@ -18,6 +19,20 @@ interface WorkflowEvent {
   timestamp: string
 }
 
+interface MetricsSummary {
+  inFlight: number
+  completed: number
+  deadLettered: number
+  retrying: number
+  avgStepLatencyMs: number
+}
+
+interface MetricsHistory {
+  inFlight: number[]
+  retrying: number[]
+  completed: number[]
+}
+
 const EVENT_COLORS: Record<EventType, string> = {
   SUBMITTED: '#3b82f6',
   STEP_DISPATCHED: '#64748b',
@@ -34,13 +49,18 @@ const SCENARIOS = [
   { name: 'duplicate-test', label: 'Duplicate Test', desc: 'Same idempotency key twice' },
 ]
 
+const HISTORY_LIMIT = 40
+
 export default function App() {
-  const [events, setEvents]     = useState<WorkflowEvent[]>([])
-  const [filter, setFilter]     = useState<Set<EventType>>(new Set())
-  const [connected, setConnected] = useState(false)
+  const [events, setEvents]         = useState<WorkflowEvent[]>([])
+  const [filter, setFilter]         = useState<Set<EventType>>(new Set())
+  const [connected, setConnected]   = useState(false)
+  const [metrics, setMetrics]       = useState<MetricsSummary | null>(null)
+  const [history, setHistory]       = useState<MetricsHistory>({ inFlight: [], retrying: [], completed: [] })
   const logRef     = useRef<HTMLDivElement>(null)
   const autoScroll = useRef(true)
 
+  // SSE connection
   useEffect(() => {
     const es = new EventSource('/events/stream')
     es.addEventListener('workflow-event', (e: MessageEvent) => {
@@ -52,6 +72,27 @@ export default function App() {
     return () => es.close()
   }, [])
 
+  // metrics polling
+  useEffect(() => {
+    const poll = async () => {
+      try {
+        const res = await fetch('/metrics/summary')
+        if (!res.ok) return
+        const s: MetricsSummary = await res.json()
+        setMetrics(s)
+        setHistory(h => ({
+          inFlight:  [...h.inFlight.slice(-(HISTORY_LIMIT - 1)), s.inFlight],
+          retrying:  [...h.retrying.slice(-(HISTORY_LIMIT - 1)), s.retrying],
+          completed: [...h.completed.slice(-(HISTORY_LIMIT - 1)), s.completed],
+        }))
+      } catch { /* backend not up yet */ }
+    }
+    poll()
+    const id = setInterval(poll, 2000)
+    return () => clearInterval(id)
+  }, [])
+
+  // auto-scroll
   useEffect(() => {
     if (autoScroll.current && logRef.current) {
       logRef.current.scrollTop = logRef.current.scrollHeight
@@ -93,6 +134,8 @@ export default function App() {
         ))}
       </section>
 
+      <MetricsPanel summary={metrics} history={history} />
+
       <section className="filters">
         <span className="filter-label">Filter:</span>
         {(Object.keys(EVENT_COLORS) as EventType[]).map(type => (
@@ -106,9 +149,7 @@ export default function App() {
           </button>
         ))}
         {filter.size > 0 && (
-          <button className="clear-btn" onClick={() => setFilter(new Set())}>
-            clear
-          </button>
+          <button className="clear-btn" onClick={() => setFilter(new Set())}>clear</button>
         )}
       </section>
 

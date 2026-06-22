@@ -8,6 +8,7 @@ export default defineConfig({
       '/events': 'http://localhost:8080',
       '/scenarios': 'http://localhost:8080',
       '/workflows': 'http://localhost:8080',
+      '/metrics': 'http://localhost:8080',
     },
   },
 })

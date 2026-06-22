@@ -56,6 +56,42 @@ header h1 {
 .scenario-btn strong { font-size: 13px; color: #f1f5f9; margin-bottom: 3px; }
 .scenario-btn span   { font-size: 11px; color: #64748b; }
 
+/* ── metrics panel ── */
+.metrics-panel {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.metric-card {
+  background: #0d1117;
+  border: 1px solid #161b27;
+  border-radius: 6px;
+  padding: 10px 14px;
+  min-width: 130px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.metric-label {
+  font-size: 10px;
+  color: #4b5563;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+}
+
+.metric-value {
+  font-size: 22px;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.metric-sublabel {
+  font-size: 10px;
+  color: #374151;
+}
+
 /* ── filters ── */
 .filters {
   display: flex;

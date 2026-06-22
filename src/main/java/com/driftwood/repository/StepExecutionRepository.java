@@ -16,4 +16,8 @@ public interface StepExecutionRepository extends JpaRepository<StepExecution, UU
 
     @Query("SELECT se FROM StepExecution se JOIN FETCH se.workflowInstance JOIN FETCH se.step WHERE se.status = :status AND se.nextRetryAt <= :now")
     List<StepExecution> findDueForRetry(StepStatus status, Instant now);
+
+    long countByStatus(StepStatus status);
+
+    List<StepExecution> findByStatus(StepStatus status);
 }
