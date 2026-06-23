@@ -1,6 +1,7 @@
 package com.driftwood.api;
 
 import com.driftwood.domain.StepStatus;
+import com.driftwood.domain.WorkflowStatus;
 import com.driftwood.repository.DeadLetterRepository;
 import com.driftwood.repository.StepExecutionRepository;
 import com.driftwood.repository.WorkflowInstanceRepository;
@@ -24,28 +25,20 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+// Exercises the stepFailureRates (random %) path in WorkerService.shouldSucceed(),
+// separate from the stepFailures (forced counter) path tested in RetryAndDeadLetterTest.
 @SpringBootTest(properties = {
-        "driftwood.worker.step-failures.flaky-workflow-step-2=2",
-        "driftwood.worker.step-failures.poison-workflow-step-2=99"
+        "driftwood.worker.step-failure-rates.poison-workflow-step-2=1.0"
 })
 @AutoConfigureMockMvc
 @EmbeddedKafka(partitions = 1, topics = {"driftwood.step.dispatch", "driftwood.step.result"})
-class RetryAndDeadLetterTest {
+class StepFailureRateTest {
 
-    @Autowired
-    private MockMvc mockMvc;
-
-    @Autowired
-    private ObjectMapper objectMapper;
-
-    @Autowired
-    private WorkflowInstanceRepository instanceRepository;
-
-    @Autowired
-    private StepExecutionRepository stepExecutionRepository;
-
-    @Autowired
-    private DeadLetterRepository deadLetterRepository;
+    @Autowired private MockMvc mockMvc;
+    @Autowired private ObjectMapper objectMapper;
+    @Autowired private WorkflowInstanceRepository instanceRepository;
+    @Autowired private StepExecutionRepository stepExecutionRepository;
+    @Autowired private DeadLetterRepository deadLetterRepository;
 
     @AfterEach
     void cleanup() {
@@ -55,9 +48,9 @@ class RetryAndDeadLetterTest {
     }
 
     @Test
-    void poisonWorkflow_exhaustsMaxAttempts_deadLettered() throws Exception {
-        // poison-workflow step-2 has maxAttempts=3 (set in V7 migration)
-        // with step-failures.poison-workflow-step-2=99 it always fails → dead-letter after 3 attempts
+    void stepFailureRate_100percent_deadLettersWithErrorMessage() throws Exception {
+        // poison-workflow step-2 has maxAttempts=3 (V7 migration).
+        // rate=1.0 → always fails via the random-rate branch → dead-letters in ~12s.
         MvcResult result = mockMvc.perform(post("/workflows/poison-workflow/instances"))
                 .andExpect(status().isAccepted())
                 .andReturn();
@@ -72,34 +65,17 @@ class RetryAndDeadLetterTest {
                         .andExpect(jsonPath("$.status").value("DEAD_LETTERED"))
         );
 
-        var entries = deadLetterRepository.findAll();
-        assertThat(entries).hasSize(1);
+        var instance = instanceRepository.findById(instanceId).orElseThrow();
+        assertThat(instance.getStatus()).isEqualTo(WorkflowStatus.DEAD_LETTERED);
 
-        var entry = entries.get(0);
+        var entry = deadLetterRepository.findAll().stream().findFirst().orElseThrow();
+        assertThat(entry.getErrorMessage()).isNotBlank();
         assertThat(entry.getStepId()).isEqualTo("poison-workflow-step-2");
-        assertThat(entry.getErrorMessage()).isNotBlank();  // failure reason must be recorded
-        assertThat(entry.getFinalAttemptCount()).isEqualTo(2); // 3 attempts: 0 → 1 → 2 → dead-letter
 
         var stepExecution = stepExecutionRepository.findAll().stream()
                 .filter(e -> e.getStep().getId().equals("poison-workflow-step-2"))
                 .findFirst().orElseThrow();
         assertThat(stepExecution.getStatus()).isEqualTo(StepStatus.DEAD_LETTERED);
-    }
-
-    @Test
-    void flakeyWorkflow_retriesTwiceThenCompletes() throws Exception {
-        MvcResult result = mockMvc.perform(post("/workflows/flaky-workflow/instances"))
-                .andExpect(status().isAccepted())
-                .andReturn();
-
-        UUID instanceId = UUID.fromString(
-                objectMapper.readTree(result.getResponse().getContentAsString())
-                        .get("id").asText());
-
-        await().atMost(30, SECONDS).untilAsserted(() ->
-                mockMvc.perform(get("/workflows/instances/" + instanceId))
-                        .andExpect(status().isOk())
-                        .andExpect(jsonPath("$.status").value("COMPLETED"))
-        );
+        assertThat(stepExecution.getAttemptCount()).isEqualTo(2); // 3 attempts exhausted
     }
 }
