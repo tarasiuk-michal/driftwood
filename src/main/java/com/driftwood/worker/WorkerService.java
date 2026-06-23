@@ -11,7 +11,7 @@ import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Service;
 
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.random.RandomGenerator;
+import java.util.concurrent.ThreadLocalRandom;
 
 @Slf4j
 @Service
@@ -49,7 +49,7 @@ public class WorkerService {
             remainingFailures.put(stepId, remaining - 1);
             return false;
         }
-        return RandomGenerator.getDefault().nextDouble() >= workerProperties.getFailureRate();
+        return ThreadLocalRandom.current().nextDouble() >= workerProperties.getFailureRate();
     }
 
     private void simulateWork() {
