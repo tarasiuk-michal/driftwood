@@ -18,3 +18,4 @@ session.log
 .claude/
 ui/node_modules/
 ui/dist/
+.env.prod
