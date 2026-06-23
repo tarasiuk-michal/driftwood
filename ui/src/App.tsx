@@ -43,10 +43,30 @@ const EVENT_COLORS: Record<EventType, string> = {
 }
 
 const SCENARIOS = [
-  { name: 'clean-batch',    label: 'Clean Batch',    desc: '20 × trivial-workflow — no failures' },
-  { name: 'flaky-batch',    label: 'Flaky Batch',    desc: '10 × flaky-workflow — step-2 fails 30%' },
-  { name: 'poison-job',     label: 'Poison Job',     desc: '1 × poison-workflow → dead-lettered' },
-  { name: 'duplicate-test', label: 'Duplicate Test', desc: 'Same idempotency key twice' },
+  {
+    name: 'clean-batch',
+    label: 'Clean Batch',
+    desc: '20 × trivial-workflow — no failures',
+    detail: 'Submits 20 trivial-workflow instances in parallel. Each has 2 steps, zero failures configured. Tests happy-path throughput and baseline metrics.',
+  },
+  {
+    name: 'flaky-batch',
+    label: 'Flaky Batch',
+    desc: '10 × flaky-workflow — step-2 fails 30%',
+    detail: 'Submits 10 flaky-workflow instances. Step-2 has a 30% random failure rate with maxAttempts=5. Watch RETRYING spike then resolve as all instances eventually complete.',
+  },
+  {
+    name: 'poison-job',
+    label: 'Poison Job',
+    desc: '1 × poison-workflow → dead-lettered',
+    detail: 'Submits 1 poison-workflow. Step-2 always fails; maxAttempts=3 exhausts in ~12 s with exponential backoff. Tests the dead-letter path and error message recording.',
+  },
+  {
+    name: 'duplicate-test',
+    label: 'Duplicate Test',
+    desc: 'Same idempotency key twice',
+    detail: 'Posts the same workflow twice with an identical Idempotency-Key header. The second call returns the same instance ID — no duplicate execution is created.',
+  },
 ]
 
 const HISTORY_LIMIT = 40
@@ -103,6 +123,13 @@ export default function App() {
     await fetch(`/scenarios/${name}`, { method: 'POST' })
   }, [])
 
+  const clearAll = useCallback(async () => {
+    await fetch('/admin/reset', { method: 'POST' })
+    setEvents([])
+    setHistory({ inFlight: [], retrying: [], completed: [] })
+    setMetrics(null)
+  }, [])
+
   const toggleFilter = (type: EventType) => {
     setFilter(prev => {
       const next = new Set(prev)
@@ -123,14 +150,21 @@ export default function App() {
         <span className={`badge ${connected ? 'connected' : 'disconnected'}`}>
           {connected ? '● live' : '○ connecting…'}
         </span>
+        <button className="reset-btn" onClick={clearAll}>↺ Clear All</button>
       </header>
 
       <section className="scenarios">
         {SCENARIOS.map(s => (
-          <button key={s.name} className="scenario-btn" onClick={() => runScenario(s.name)}>
-            <strong>{s.label}</strong>
-            <span>{s.desc}</span>
-          </button>
+          <div key={s.name} className="scenario-wrap">
+            <button className="scenario-btn" onClick={() => runScenario(s.name)}>
+              <strong>{s.label}</strong>
+              <span>{s.desc}</span>
+            </button>
+            <button className="info-btn" type="button" aria-label={`Info: ${s.label}`}>
+              ℹ
+              <span className="tooltip">{s.detail}</span>
+            </button>
+          </div>
         ))}
       </section>
 

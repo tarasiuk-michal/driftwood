@@ -29,6 +29,21 @@ header h1 {
 .badge.connected    { background: #14532d; color: #4ade80; }
 .badge.disconnected { background: #1c1017; color: #6b7280; }
 
+.reset-btn {
+  margin-left: auto;
+  font-size: 11px;
+  padding: 3px 12px;
+  border-radius: 4px;
+  border: 1px solid #4b2020;
+  background: transparent;
+  color: #6b3030;
+  cursor: pointer;
+  font-family: inherit;
+  transition: color 0.1s, border-color 0.1s, background 0.1s;
+}
+
+.reset-btn:hover { color: #ef4444; border-color: #ef4444; background: rgba(239,68,68,0.06); }
+
 /* ── scenarios ── */
 .scenarios {
   display: flex;
@@ -36,14 +51,20 @@ header h1 {
   flex-wrap: wrap;
 }
 
+.scenario-wrap {
+  display: flex;
+  position: relative;
+}
+
 .scenario-btn {
   display: flex;
   flex-direction: column;
   background: #161b27;
   border: 1px solid #1e2a3a;
+  border-right: none;
   color: #e2e8f0;
   padding: 10px 16px;
-  border-radius: 6px;
+  border-radius: 6px 0 0 6px;
   cursor: pointer;
   text-align: left;
   min-width: 180px;
@@ -55,6 +76,44 @@ header h1 {
 .scenario-btn:active { background: #243045; }
 .scenario-btn strong { font-size: 13px; color: #f1f5f9; margin-bottom: 3px; }
 .scenario-btn span   { font-size: 11px; color: #64748b; }
+
+.info-btn {
+  position: relative;
+  background: #161b27;
+  border: 1px solid #1e2a3a;
+  border-radius: 0 6px 6px 0;
+  color: #334155;
+  padding: 0 10px;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 13px;
+  transition: color 0.1s, background 0.1s;
+  display: flex;
+  align-items: center;
+}
+
+.info-btn:hover { color: #94a3b8; background: #1e2535; }
+
+.tooltip {
+  display: none;
+  position: absolute;
+  bottom: calc(100% + 8px);
+  right: 0;
+  background: #1a2236;
+  border: 1px solid #2d4060;
+  color: #cbd5e1;
+  font-size: 12px;
+  line-height: 1.6;
+  padding: 10px 14px;
+  border-radius: 6px;
+  width: 260px;
+  z-index: 200;
+  white-space: normal;
+  pointer-events: none;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.4);
+}
+
+.info-btn:hover .tooltip { display: block; }
 
 /* ── metrics panel ── */
 .metrics-panel {
