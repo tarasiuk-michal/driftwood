@@ -108,7 +108,7 @@ export default function App() {
       } catch { /* backend not up yet */ }
     }
     poll()
-    const id = setInterval(poll, 5000)
+    const id = setInterval(poll, 1000)
     return () => clearInterval(id)
   }, [])
 

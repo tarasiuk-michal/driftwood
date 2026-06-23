@@ -97,8 +97,8 @@ header h1 {
 .tooltip {
   display: none;
   position: absolute;
-  bottom: calc(100% + 8px);
-  right: 0;
+  top: calc(100% + 6px);
+  left: 0;
   background: #1a2236;
   border: 1px solid #2d4060;
   color: #cbd5e1;
@@ -106,7 +106,7 @@ header h1 {
   line-height: 1.6;
   padding: 10px 14px;
   border-radius: 6px;
-  width: 260px;
+  width: 240px;
   z-index: 200;
   white-space: normal;
   pointer-events: none;
