@@ -24,13 +24,13 @@ public class ScenarioController {
     public ResponseEntity<Map<String, Object>> run(@PathVariable String name) {
         return switch (name) {
             case "clean-batch" -> {
-                List<UUID> ids = IntStream.range(0, 5)
+                List<UUID> ids = IntStream.range(0, 20)
                         .mapToObj(i -> orchestratorService.submit("trivial-workflow", null).id())
                         .toList();
                 yield ResponseEntity.accepted().body(Map.of("scenario", name, "instanceIds", ids));
             }
             case "flaky-batch" -> {
-                List<UUID> ids = IntStream.range(0, 5)
+                List<UUID> ids = IntStream.range(0, 10)
                         .mapToObj(i -> orchestratorService.submit("flaky-workflow", null).id())
                         .toList();
                 yield ResponseEntity.accepted().body(Map.of("scenario", name, "instanceIds", ids));

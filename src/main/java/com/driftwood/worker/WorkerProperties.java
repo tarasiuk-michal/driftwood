@@ -15,4 +15,5 @@ import java.util.Map;
 public class WorkerProperties {
     private double failureRate = 0.0;
     private Map<String, Integer> stepFailures = new HashMap<>();
+    private Map<String, Double> stepFailureRates = new HashMap<>();
 }

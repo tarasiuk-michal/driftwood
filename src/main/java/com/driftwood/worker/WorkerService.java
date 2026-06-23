@@ -49,7 +49,9 @@ public class WorkerService {
             remainingFailures.put(stepId, remaining - 1);
             return false;
         }
-        return ThreadLocalRandom.current().nextDouble() >= workerProperties.getFailureRate();
+        double rate = workerProperties.getStepFailureRates()
+                .getOrDefault(stepId, workerProperties.getFailureRate());
+        return ThreadLocalRandom.current().nextDouble() >= rate;
     }
 
     private void simulateWork() {

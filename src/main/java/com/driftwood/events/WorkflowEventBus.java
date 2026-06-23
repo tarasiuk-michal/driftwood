@@ -29,7 +29,7 @@ public class WorkflowEventBus {
         return emitter;
     }
 
-    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT, fallbackExecution = true)
     public void onEvent(WorkflowEvent event) {
         List<SseEmitter> dead = new ArrayList<>();
         for (SseEmitter emitter : emitters) {

@@ -43,8 +43,8 @@ const EVENT_COLORS: Record<EventType, string> = {
 }
 
 const SCENARIOS = [
-  { name: 'clean-batch',    label: 'Clean Batch',    desc: '5 × trivial-workflow — no failures' },
-  { name: 'flaky-batch',    label: 'Flaky Batch',    desc: '5 × flaky-workflow — step-2 retries' },
+  { name: 'clean-batch',    label: 'Clean Batch',    desc: '20 × trivial-workflow — no failures' },
+  { name: 'flaky-batch',    label: 'Flaky Batch',    desc: '10 × flaky-workflow — step-2 fails 30%' },
   { name: 'poison-job',     label: 'Poison Job',     desc: '1 × poison-workflow → dead-lettered' },
   { name: 'duplicate-test', label: 'Duplicate Test', desc: 'Same idempotency key twice' },
 ]
