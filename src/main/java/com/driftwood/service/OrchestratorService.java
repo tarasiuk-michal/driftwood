@@ -188,6 +188,7 @@ public class OrchestratorService {
         execution.setStep(step);
         execution.setStatus(StepStatus.PENDING);
         execution.setStartedAt(Instant.now());
+        execution.setMaxAttempts(step.getMaxAttempts());
         stepExecutionRepository.save(execution);
 
         instance.getStepExecutions().add(execution);

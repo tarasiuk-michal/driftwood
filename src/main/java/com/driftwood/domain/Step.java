@@ -27,6 +27,9 @@ public class Step {
     @Column(nullable = false)
     private int stepOrder;
 
+    @Column(nullable = false)
+    private int maxAttempts = 5;
+
     @Column(nullable = false, updatable = false)
     private Instant createdAt = Instant.now();
 }

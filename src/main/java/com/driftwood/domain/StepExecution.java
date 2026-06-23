@@ -40,7 +40,7 @@ public class StepExecution {
     private Instant nextRetryAt;
 
     @Column(nullable = false)
-    private int maxAttempts = 5;
+    private int maxAttempts = 3;
 
     @Column(nullable = false, updatable = false)
     private Instant createdAt = Instant.now();
